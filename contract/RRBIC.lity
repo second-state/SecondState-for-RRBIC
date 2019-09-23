@@ -31,9 +31,6 @@ contract IssuanceOfWorkInstructionAndPurchaseOrders {
 		string invoicingInstructions;
 		WIState state;
 	}
-	struct WorkPlan {
-		TaskCard[] tasks;
-	}
 	struct PaymentMethod {
 		string rrCustomerBizAuthName;
 		string sapNetActivityCode;
@@ -118,17 +115,27 @@ contract IssuanceOfWorkInstructionAndPurchaseOrders {
 		TaskCardState state;
 		TaskUpdateState taskUpdateState;
 	}
+	struct WorkPlan {
+		TaskCard[] tasks;
+	}
 	struct Job {
 		TaskCard[] taskList;
 		bool isComplete;
 		PurchaseOrder purchaseOrder;
 	}
+	Invoice invoice;
 	Job job;
 	TaskCard task;
 	WorkInstruction WI;
+	WorkPlan WP;
 	PurchaseOrder PO;
 	Catalogue[] Catalogues;
 	Quote Q;
+//-------------------------------------------------------------
+// Step 0.
+	function init () public {
+		job.isComplete = false;
+	}
 
 //-------------------------------------------------------------
 // Step 4.
@@ -214,16 +221,48 @@ contract IssuanceOfWorkInstructionAndPurchaseOrders {
 	// Sender: SIAEC PDD, issue to SIAEC LAE
 	function issueTaskCard () public {
 		task.state = SendToLAE;
-		//TODO: Add task into Job.taskList
+		job.taskList.push(task);
 	}
 
-	// Sender: SIAEC, send to Aircraft OEM everyday
+	// Sender: SIAEC, send to Aircraft OEM **everyday**
 	function updateTaskToWorkPlan () public {
-		//TODO: traverse tasks in the Job.taskList,
-		//     	    if task.taskUpdateState = notYetUpdateToWorkPlan
-		//               insert tasks which are not yet updated into WorkPlan
+		uint i = 0;
+		for (i = 0; i < job.taskList.length; i++) {
+			if (job.taskList[i].taskUpdateState == notYetUpdateToWorkPlan) {
+				WP.taskList.push(job.taskList[i]);
+				job.taskList[i].taskUpdateState = UpdatedToWorkPlan;
+			}
+		}
 	}
 //-------------------------------------------------------------
 // Step 17.
+	// Sender: Step 17 entry point, assume all of the tasks in the job are done.
+	function clearJob() public {
+		job.isComplete = true;
+	}
+	// Sender: SIAEC Vetting sends two files to the ERP system
+	function sendDocsToERP () public {
+		// TODO: Send Tech records
+		// TODO: Send job
+	}
+	// Sender: SIAEC sends billing request to RR
+	function sendBillingToRR () public {
+		// TODO: Send billing
+	}
+	// Sender: RR approves the billing request to SIAEC
+	function approveBilling () public {
+	}
+	// Sender: SIAEC sends invoice to RR and request RR's approval
+	function sendInvoice () public {
+		invoice.approval = false;
+		invoice.opServDeskRef = job.purchaseOrder.TotalCareCorpCareRef
+	}
+	// Sender: RR approves the invoice
+	function approveInvoice () public {
+		invoice.approval = true;
+	}
+	// Sender: SIAEC pays the money
+	function pay () public {
+	}
 }
 
