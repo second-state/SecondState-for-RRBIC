@@ -1,0 +1,72 @@
+pragma lity ^1.2.6;
+contract JobCompletionAndBilling {
+	struct PaymentMethod {
+		string rrCustomerBizAuthName;
+		string sapNetActivityCode;
+		string rrCustomerBizAuthName;
+	}
+	struct Invoice {
+		bool approval;
+		string opServDeskRef; //Operational Service Desk Reference
+		bool paymentMethodType; //True: TotalCare/CorportateCare, False: Other RR Cost
+		PaymentMethod paymentMethod;
+		string otherDetails;
+	}
+	struct Bill {
+		//TODO: Bill content is still unknown.
+	}
+	struct Task {
+		bool isComplete;
+		int rebate;
+	}
+	struct PurchaseOrder {
+		string TotalCareCorpCareRef;
+	}
+	struct Job {
+		//TODO: I need a task list here.
+		Task* taskList;
+		bool isComplete;
+		PurchaseOrder purchaseOrder;
+	}
+	function updateToERP (Job job) public {
+		//TODO: Update "Tech Records" and "Scanned Job Cards"
+	}
+	Invoice invoice;
+	function createInvoice (Job job) public {
+		invoice.opServDeskRef = job.purchaseOrder.TotalCareCorpCareRef
+	}
+	function checkInvoice (Invoice invoice) public {
+		//User要決定要不要發approve
+		isApproved = askUserApproveOrNot()
+			if (isApproved)
+				then {
+					invoice.isApproved = true
+				}
+	}
+	rule "JobCompletionAndBilling" when {
+		//SIAEC check Job is completed
+	} then {
+		updateToERP(job)
+
+			if (submitBillsToRR(job))
+				then { 
+					Invoice = createInvoice(job)
+						sendInvoiceToRR(invoice) //TODO, 要從SIAEC送給RR
+				}
+	}
+	rule "ApproveBill" when {
+		// RR recieve Bills to be approved
+	} then {
+		checkBills(bill)
+	}
+	rule "ApproveInvoice" when {
+		// RR recieve Invoice to be approved
+	} then {
+		checkInvoice(invoice)
+	}
+	rule "RecvApprovedInvoice" when {
+		//SIAEC recv approved Invoice from RR
+	} then {
+		payment(invoice)
+	}
+}
