@@ -1,0 +1,101 @@
+pragma lity ^1.2.6;
+
+contract IssuanceTaskCardAndWorkPlanUpdate {
+    struct WorkInstruction {
+        int workInstructionNum;
+        int networkNumber;
+        string activity;
+        string originatorName;
+        int date;
+        string ownerOperator;
+        string acRegistration;
+        string engineType;
+        int engineSerialNumber;
+        bool onOffWing;
+        string wingPosition;
+        string taskLocation;
+        int taskStartDateTime;
+        int taskEndDateTime;
+        string workscopeContactName;
+        int workscopeContatNumber;
+        string requestedTaskDescription;
+        string technicalDataRef;
+        string siaTaskRef;
+        string additionalNotes;
+        string costType;
+        bool workInstructionAcceptance;
+        string invoicingInstructions;
+    }
+    struct WorkPlan {
+        string task;
+        int acPriority;
+        string type;
+        int referenceNumber;
+        string description;
+        int funcLOCATA;
+        string notificationMEL;
+        string mplanCAT;
+        int lastDoneOriginDate;
+        int dueDate;
+        string remarksRectifications;
+        string sparesRequired;
+        int quantity;
+        int status;
+        string lastUpdateByAndDate;
+        string tspRemarks;
+        string team;
+    }
+    struct PaymentMethod {
+        string rrCustomerBizAuthName;
+        string sapNetActivityCode;
+        string rrCustomerBizAuthName;
+    }
+    struct Invoice {
+        bool approval;
+        string opServDeskRef; //Operational Service Desk Reference
+        bool paymentMethodType; //True: TotalCare/CorportateCare, False: Other RR Cost
+        PaymentMethod paymentMethod;
+        string otherDetails;
+    }
+    struct Bill {
+        //TODO: Bill content is still unknown.
+    }
+
+    struct Task {
+        bool isComplete;
+        int rebate;
+    }
+
+    struct PurchaseOrder {
+        string TotalCareCorpCareRef;
+    }
+
+    struct Job {
+        //TODO: I need a task list here.
+        Task* taskList;
+        bool isComplete;
+        PurchaseOrder purchaseOrder;
+    }
+
+    TaskCard *testCards;
+
+
+
+    rule "RecvWI" when {
+        //SIAEC recv approved Invoice from RR
+    } then {
+        payment(invoice)
+    }
+    rule "UpdateWorkPlan" when {
+        //SIAEC PDD recieve  WorkInstruction(WI) from RR
+    } then {
+        *testCards = generateTaskCards(workInstruction)
+        issueTaskCard(testCard)
+    }
+    rule "updateNewTasksEveryday" when {
+        // TODO: NEW day
+    } then {
+        updateTasksToWorkPlan(testCards)
+    }
+}
+
