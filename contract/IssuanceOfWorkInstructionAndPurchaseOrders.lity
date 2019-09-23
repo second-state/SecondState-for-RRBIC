@@ -1,117 +1,188 @@
 pragma lity ^1.2.6;
 
 contract IssuanceOfWorkInstructionAndPurchaseOrders {
-    struct WorkInstruction {
-        int workInstructionNum;
-        int networkNumber;
-        string activity;
-        string originatorName;
-        int date;
-        string ownerOperator;
-        string acRegistration;
-        string engineType;
-        int engineSerialNumber;
-        bool onOffWing;
-        string wingPosition;
-        string taskLocation;
-        int taskStartDateTime;
-        int taskEndDateTime;
-        string workscopeContactName;
-        int workscopeContatNumber;
-        string requestedTaskDescription;
-        string technicalDataRef;
-        string siaTaskRef;
-        string additionalNotes;
-        string costType;
-        bool workInstructionAcceptance;
-        string invoicingInstructions;
-    }
-    struct WorkPlan {
-        string task;
-        int acPriority;
-        string type;
-        int referenceNumber;
-        string description;
-        int funcLOCATA;
-        string notificationMEL;
-        string mplanCAT;
-        int lastDoneOriginDate;
-        int dueDate;
-        string remarksRectifications;
-        string sparesRequired;
-        int quantity;
-        int status;
-        string lastUpdateByAndDate;
-        string tspRemarks;
-        string team;
-    }
-    struct PaymentMethod {
-        string rrCustomerBizAuthName;
-        string sapNetActivityCode;
-        string rrCustomerBizAuthName;
-    }
-    struct Invoice {
-        bool approval;
-        string opServDeskRef; //Operational Service Desk Reference
-        bool paymentMethodType; //True: TotalCare/CorportateCare, False: Other RR Cost
-        PaymentMethod paymentMethod;
-        string otherDetails;
-    }
-    struct Bill {
-        //TODO: Bill content is still unknown.
-    }
+	enum WIState {
+		InitByRR,
+		EmitToSIAEC
+	}
+	struct WorkInstruction {
+		int workInstructionNum;
+		int networkNumber;
+		string activity;
+		string originatorName;
+		int date;
+		string ownerOperator;
+		string acRegistration;
+		string engineType;
+		int engineSerialNumber;
+		bool onOffWing;
+		string wingPosition;
+		string taskLocation;
+		int taskStartDateTime;
+		int taskEndDateTime;
+		string workscopeContactName;
+		int workscopeContatNumber;
+		string requestedTaskDescription;
+		string technicalDataRef;
+		string siaTaskRef;
+		string additionalNotes;
+		string costType;
+		bool workInstructionAcceptance;
+		string invoicingInstructions;
+		WIState state;
+	}
+	struct WorkPlan {
+		string task;
+		int acPriority;
+		string type;
+		int referenceNumber;
+		string description;
+		int funcLOCATA;
+		string notificationMEL;
+		string mplanCAT;
+		int lastDoneOriginDate;
+		int dueDate;
+		string remarksRectifications;
+		string sparesRequired;
+		int quantity;
+		int status;
+		string lastUpdateByAndDate;
+		string tspRemarks;
+		string team;
+	}
+	struct PaymentMethod {
+		string rrCustomerBizAuthName;
+		string sapNetActivityCode;
+		string rrCustomerBizAuthName;
+	}
+	struct Invoice {
+		bool approval;
+		string opServDeskRef; //Operational Service Desk Reference
+		bool paymentMethodType; //True: TotalCare/CorportateCare, False: Other RR Cost
+		PaymentMethod paymentMethod;
+		string otherDetails;
+	}
+	struct Bill {
+		//TODO: Bill content is still unknown.
+	}
 
-    struct Task {
-        bool isComplete;
-        int rebate;
-    }
+	struct Task {
+		bool isComplete;
+		int rebate;
+	}
 
-    struct PurchaseOrder {
-        string itemName;
-        string CustomerFullRegisteredCompanyAddr;
-        int CustomerPurchaseOrderNum;
-        int Quoterequired;
-        int OnWingCareLineMaintenanceContractRefNum;
-        string TotalCareCorpCareRef;
-    }
+	enum POState {
+		InitByRR,
+		EmitToSIAEC,
+	}
+	struct PurchaseOrder {
+		string serviceName;
+		string customerCompanyName;
+		string customerFullRegisteredCompanyAddr;
+		int customerPurchaseOrderNum;
+		int quoterequired;
+		int onWingCareLineMaintenanceContractRefNum;
+		string totalCareCorpCareRef;
+		POState state;
+	}
+	
+	enum QState {
+		InitBySIAEC,
+		AskRRPurchasingForPrice,
+		ReplyPriceTOSIAEC,
+		Finilized,
+	}
+	struct Quote {
+		string serviceName;
+		int price;
+		bool isApproval;
+		QState state;
+	}
 
-    struct Job {
-        //TODO: I need a task list here.
-        Task* taskList;
-        bool isComplete;
-        PurchaseOrder purchaseOrder;
-    }
-    Job job;
-    TaskCard *testCards;
-    WorkInstruction workInstruction;
+	struct Catalogue {
+		string serviceName;
+		int price;
+	}
 
-    function sendWI () public {
-        //send WI to SIAEC PDD
-        //send WI to Airline MPC
-    }
+	struct Job {
+		//TODO: I need a task list here.
+		Task* taskList;
+		bool isComplete;
+		PurchaseOrder purchaseOrder;
+	}
+	Job job;
+	TaskCard *testCards;
+	WorkInstruction WI;
+	PurchaseOrder PO;
+	Catalogue[] Catalogues;
+	Quote Q;
 
-    function issueWorkInstruction () public {
-        workInstruction.ownerOperator = "XYZ Air"
-        workInstruction.engineType = "XX::KXKX"
-        workInstruction.engineSerialNumber = "BICX1"
-        sendWI()
-    }
+	// Sender: RR
+	function sendWI () public {
+		//send WI to SIAEC PDD
+		WI.state = EmitToSIAEC;
+		//send WI to Airline MPC
+		//TODO: how to loop Airline MPC.
+	}
 
-    function issuePurchaseOrders () public {
-        //TODO
-    }
+	// Sender: RR
+	function issueWorkInstruction (/* You can use arguments to fill up the WI form */) public {
+		WI.ownerOperator = "XYZ Air";
+		WI.engineType = "XX::KXKX";
+		WI.engineSerialNumber = "BICX1";
+		WI.state = InitByRR;
+		sendWI();
+	}
 
-    rule "IssuanceOfWorkInstructionAndPurchaseOrders" when {
-        //Start point of the RRBIC smart contracts
-    } then {
-        issueWorkInstruction()
-        issuePurchaseOrders()
-    }
-    rule "SendQuote" when {
-        //Recv PO from RR TCAvPlanner
-    } then {
-        //if items-to-buy is in "catalogue", then use the price in the catalogue
-        //else send "Quote" to RR Purchasing to get approval
-    }
+	// Sender: RR
+	function issuePurchaseOrders (/* You can use arguments to fill up the PO form */) public {
+		PO.serviceName = "Foobar";
+		PO.customerCompanyName = "XYZ Air";
+		PO.state = EmitToSIAEC;
+	}
+
+	// Sender: Someone from Step3.
+	function entryPoint() public {
+		issueWorkInstruction();
+		issuePurchaseOrders();
+	}
+
+	// Sender: SIAEC
+	function sendQuote () public {
+		uint i = 0;
+		Q.serviceName = PO.serviceName;
+		Q.isApproval = false;
+		for (i = 0; i < Catalogues.length; i++) {
+			if (PO.serviceName == Catalogues[i].serviceName) {
+				Q.price = Catalogues[i].price;
+				Q.isApproval = true;
+				Q.state = Finilized;
+				break;
+			}
+		}
+		if (Q.state != Finilized) {
+			// Catalogue not found
+			Q.price = 0; // Will be provided by RR purchasing later.
+			Q.state = AskRRPurchasingForPrice;
+		}
+	}
+
+	// Sender: RR purchasing
+	function replyQuote () public {
+		Q.price = 1234; // RR purchasing sets the price to the service;
+		Q.state = ReplyPriceToSIAEC;
+	}
+
+	// Sender: SIAEC
+	function approveQuote () public {
+		Q.isApproval = true;
+
+		// Save to Catalogue
+		Catalogue C;
+		C.serviceName = Q.serviceName;
+		C.price = Q.price;
+		Catalogues.push(C);
+		Q.state = Finilized;
+	}
 }
 
