@@ -14,7 +14,7 @@ contract IssuanceOfWorkInstructionAndPurchaseOrders {
 		string ownerOperator;
 		string acRegistration;
 		string engineType;
-		int engineSerialNumber;
+		string engineSerialNumber;
 		bool onOffWing;
 		string wingPosition;
 		string taskLocation;
@@ -31,10 +31,14 @@ contract IssuanceOfWorkInstructionAndPurchaseOrders {
 		string invoicingInstructions;
 		WIState state;
 	}
+	enum PaymentType {
+		TotalCare_CorporateCare,
+		OtherRRCost
+	}
 	struct PaymentMethod {
+		PaymentType paymentType;
 		string rrCustomerBizAuthName;
 		string sapNetActivityCode;
-		string rrCustomerBizAuthName;
 	}
 	struct Invoice {
 		bool approval;
@@ -44,12 +48,13 @@ contract IssuanceOfWorkInstructionAndPurchaseOrders {
 		string otherDetails;
 	}
 	struct Bill {
+		bool approval;
 		//TODO: Bill content is still unknown.
 	}
 
 	enum POState {
 		InitByRR,
-		EmitToSIAEC,
+		EmitToSIAEC
 	}
 	struct PurchaseOrder {
 		string serviceName;
@@ -65,8 +70,8 @@ contract IssuanceOfWorkInstructionAndPurchaseOrders {
 	enum QState {
 		InitBySIAEC,
 		AskRRPurchasingForPrice,
-		ReplyPriceTOSIAEC,
-		Finilized,
+		ReplyPriceToSIAEC,
+		Finilized
 	}
 	struct Quote {
 		string serviceName;
@@ -83,21 +88,21 @@ contract IssuanceOfWorkInstructionAndPurchaseOrders {
 	enum TaskCategory {
 		SpecialInspection,
 		SupplementaryJobCard,
-		Others,
+		Others
 	}
 	enum TaskCardState {
 		GeneratedByPDD,
-		SendToLAE,
+		SendToLAE
 	}
 	enum TaskUpdateState {
 		notYetUpdateToWorkPlan,
-		UpdatedToWorkPlan,
+		UpdatedToWorkPlan
 	}
 	struct TaskCard {
 		string taskName;
 		string acRegistration;
 		int priority;
-		string type;
+		TaskCategory taskType;
 		int referenceNumber;
 		string description;
 		int funcLOC_ATA;
@@ -142,7 +147,7 @@ contract IssuanceOfWorkInstructionAndPurchaseOrders {
 	// Sender: RR
 	function sendWI () public {
 		//send WI to SIAEC PDD
-		WI.state = EmitToSIAEC;
+		WI.state = WIState.EmitToSIAEC;
 		//send WI to Airline MPC
 		//TODO: how to loop Airline MPC.
 	}
@@ -152,7 +157,7 @@ contract IssuanceOfWorkInstructionAndPurchaseOrders {
 		WI.ownerOperator = "XYZ Air";
 		WI.engineType = "XX::KXKX";
 		WI.engineSerialNumber = "BICX1";
-		WI.state = InitByRR;
+		WI.state = WIState.InitByRR;
 		sendWI();
 	}
 
@@ -160,7 +165,7 @@ contract IssuanceOfWorkInstructionAndPurchaseOrders {
 	function issuePurchaseOrders (/* You can use arguments to fill up the PO form */) public {
 		PO.serviceName = "Foobar";
 		PO.customerCompanyName = "XYZ Air";
-		PO.state = EmitToSIAEC;
+		PO.state = POState.EmitToSIAEC;
 	}
 
 	// Sender: Someone from Step3.
@@ -175,24 +180,24 @@ contract IssuanceOfWorkInstructionAndPurchaseOrders {
 		Q.serviceName = PO.serviceName;
 		Q.isApproval = false;
 		for (i = 0; i < Catalogues.length; i++) {
-			if (PO.serviceName == Catalogues[i].serviceName) {
+			if (keccak256(abi.encodePacked(PO.serviceName)) == keccak256(abi.encodePacked(Catalogues[i].serviceName))) {
 				Q.price = Catalogues[i].price;
 				Q.isApproval = true;
-				Q.state = Finilized;
+				Q.state = QState.Finilized;
 				break;
 			}
 		}
-		if (Q.state != Finilized) {
+		if (Q.state != QState.Finilized) {
 			// Catalogue not found
 			Q.price = 0; // Will be provided by RR purchasing later.
-			Q.state = AskRRPurchasingForPrice;
+			Q.state = QState.AskRRPurchasingForPrice;
 		}
 	}
 
-	// Sender: RR purchasing
+// Sender: RR purchasing
 	function replyQuote () public {
 		Q.price = 1234; // RR purchasing sets the price to the service;
-		Q.state = ReplyPriceToSIAEC;
+		Q.state = QState.ReplyPriceToSIAEC;
 	}
 
 	// Sender: SIAEC
@@ -200,11 +205,11 @@ contract IssuanceOfWorkInstructionAndPurchaseOrders {
 		Q.isApproval = true;
 
 		// Save to Catalogue
-		Catalogue C;
+		Catalogue memory C;
 		C.serviceName = Q.serviceName;
 		C.price = Q.price;
 		Catalogues.push(C);
-		Q.state = Finilized;
+		Q.state = QState.Finilized;
 	}
 //-------------------------------------------------------------
 // Step 5.
@@ -212,15 +217,15 @@ contract IssuanceOfWorkInstructionAndPurchaseOrders {
 	function generateTaskCards () public {
 		task.taskName = WI.requestedTaskDescription;
 		task.acRegistration = WI.acRegistration;
-		task.type = SpecialInspection; // For the demo purpose, we just set the category to SpecialInspection, and you could set the value by the arguments in the future.
+		task.taskType = TaskCategory.SpecialInspection; // For the demo purpose, we just set the category to SpecialInspection, and you could set the value by the arguments in the future.
 		task.description = WI.requestedTaskDescription;
-		task.state = GeneratedByPDD;
-		task.taskUpdateState = notYetUpdateToWorkPlan;
+		task.state = TaskCardState.GeneratedByPDD;
+		task.taskUpdateState = TaskUpdateState.notYetUpdateToWorkPlan;
 	}
 
 	// Sender: SIAEC PDD, issue to SIAEC LAE
 	function issueTaskCard () public {
-		task.state = SendToLAE;
+		task.state = TaskCardState.SendToLAE;
 		job.taskList.push(task);
 	}
 
@@ -228,9 +233,9 @@ contract IssuanceOfWorkInstructionAndPurchaseOrders {
 	function updateTaskToWorkPlan () public {
 		uint i = 0;
 		for (i = 0; i < job.taskList.length; i++) {
-			if (job.taskList[i].taskUpdateState == notYetUpdateToWorkPlan) {
-				WP.taskList.push(job.taskList[i]);
-				job.taskList[i].taskUpdateState = UpdatedToWorkPlan;
+			if (job.taskList[i].taskUpdateState == TaskUpdateState.notYetUpdateToWorkPlan) {
+				WP.tasks.push(job.taskList[i]);
+				job.taskList[i].taskUpdateState = TaskUpdateState.UpdatedToWorkPlan;
 			}
 		}
 	}
@@ -255,7 +260,7 @@ contract IssuanceOfWorkInstructionAndPurchaseOrders {
 	// Sender: SIAEC sends invoice to RR and request RR's approval
 	function sendInvoice () public {
 		invoice.approval = false;
-		invoice.opServDeskRef = job.purchaseOrder.TotalCareCorpCareRef
+		invoice.opServDeskRef = job.purchaseOrder.totalCareCorpCareRef;
 	}
 	// Sender: RR approves the invoice
 	function approveInvoice () public {
@@ -265,4 +270,5 @@ contract IssuanceOfWorkInstructionAndPurchaseOrders {
 	function pay () public {
 	}
 }
+
 
