@@ -13,19 +13,24 @@ You can copy and execute smart contracts from this repository to BUIDL by follow
 #### 1. Copy the content of `contracts/RRBIC.lity`.
 
 #### 2. Open your browser and connect to [BUIDL](https://buidl.secondstate.io/)
-  - ![Open BUIDL](doc/images/pic1.png)
+
+![Open BUIDL](doc/images/pic1.png)
 
 #### 3. Paste the content of `contracts/RRBIC.lity` to [BUIDL](https://buidl.secondstate.io/) 
-  - ![Paste RRBIC.lity](doc/images/pic2.gif)
+
+![Paste RRBIC.lity](doc/images/pic2.gif)
 
 #### 4. Create accounts and let total accounts be 7 to simulate Airline, RR Purchasing, SIAEC PDD, SIAEC LAE, SIAEC Purchasing, MRO, and Aircraft OEM
-  - ![Create accounts](doc/images/pic3.gif)
+
+![Create accounts](doc/images/pic3.gif)
 
 #### 5. Paste the addresses of created accounts to the smart contract in BUIDL.
-  - ![Paste address of accounts](doc/images/pic4.gif)
+
+![Paste address of accounts](doc/images/pic4.gif)
 
 #### 6. Compile and Deploy the smart contract
-  - ![compile and deploy smart contract](doc/images/pic5.gif)
+
+![compile and deploy smart contract](doc/images/pic5.gif)
 
 
 #### 7. Execute `Step 4:Issuance of Work Instructions and Purchase Orders`
@@ -38,20 +43,26 @@ You can copy and execute smart contracts from this repository to BUIDL by follow
             2. And cc the WI to Airline MPC as well.
         2. `issuePurchaseOrders("ServiceName", "XYZ Air")`
             1. In this function, it will create and send the PO to SIAEC PURCHASING.
+![RR_TCAv_Planner calls entryPoint](doc/images/pic-step4-1.gif)
 2. SIAEC PURCHASING will need to update PO by calling `fillUpPO(POid)` 
     1. If the service name is not in the catalogues, this function will emit `createQuoteWithPOid(POid)` and `sendQuoteToRR(POid)` to retrieve the Quote information.
     2. Otherwise, it will update PO from the existed catalogues.
+![SIAEC PURCHASING will need to update PO by calling fillUpPO(POid)](doc/images/pic-step4-2.gif)
 3. (Optional, if 2-1 happens) RR PURCHASING will need to reply the Quote Price by calling `replyQuotePrice(POid, Price)`
+![RR PURCHASING will need to reply the Quote Price by calling replyQuotePrice(POid, Price)](doc/images/pic-step4-3.gif)
 4. (Optional, if 3 happens) SIAEC PURCHASING will need to approve Quote by calling `approveQuote(POid)`
 
 #### 8. Execute `Step 5:Issuance of Task Cards and Work Plan Update`
 
 1. When SIAEC PDD received WI from RR TCAv_Planner. SIAEC PDD will generate the task card for this WI by calling `generateTaskCards(WIid)`
+![SIAEC PDD will generate the task card for this WI](doc/images/pic-step5-1.gif)
 2. And SIAEC PDD will issue this Task Card to SIAEC LAE and add it into Work Plan by calling `issueTaskCardToWorkPlan(WIid)`
+![SIAEC PDD will issue this Task Card to SIAEC LAE and add it into Work Plan](doc/images/pic-step5-2.gif)
 
 #### 9. Assume Step 6, 7 are finished
 
 1. SIAEC MPU will call `assumeStep7UpdateTask(WIid)` to mark the task related to current WI is completed.
+![AssumeStep6&7](doc/images/pic-assume-step7.gif)
 
 #### 10.  Jump to `Step 17:Job Completion and Billing`.
 
@@ -59,10 +70,15 @@ You can copy and execute smart contracts from this repository to BUIDL by follow
     1. In this function, it will contains two phases:
         1. SIAEC VETTING will update tech records and task to the ERP system by calling `sendDocsToERP()`
         2. SIAEC VETTING will create the billing information and send it to the RR PURCHASING by `createBilling(WIid)` and `sendBillingToRR(WIid)`.
+![SIAEC VETTING will be the entry point](doc/images/pic-step17-1.gif)
 2. When RR PURCHASING received billing information, it will need to approve this billing by `approveBilling(WIid)`.
+![approve this billing](doc/images/pic-step17-2.gif)
 3. When SIAEC VETTING checked the billing state is approval, it will create and send invoice back to RR PURCHASING by `createInvoice(WIid)` and `sendInvoice(WIid)`.
+![create and send invoice back to RR PURCHASING](doc/images/pic-step17-3.gif)
 4. After RR PURCHASING received invoice, it will need to approve this invoice by `approveInvoice(WIid)`
+![approve this invoice](doc/images/pic-step17-4.gif)
 5. After RR PURCHASING approved this invoice, SIAEC VETTING will make the payment by `pay(WIid)`.
+![SIAEC VETTING will make the payment ](doc/images/pic-step17-5.gif)
 
 
 ## Build blockchain by yourself
