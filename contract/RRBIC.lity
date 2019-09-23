@@ -1,9 +1,73 @@
 pragma lity ^1.2.6;
 
 contract IssuanceOfWorkInstructionAndPurchaseOrders {
+//-------------------------------------------------------------
+// Setup the accounts
+	address public RR_TCAv_Planner_ACCOUNT = address(0x1); // Replaced by the REAL RR_TCAv_Planner_ACCOUNT address.
+	address public RR_PURCHASING_ACCOUNT = address(0x2); //  Replaced by the REAL RR_PURCHASING_ACCOUNT address.
+	address public SIAEC_PDD_ACCOUNT = address(0x3); // Replaced by the REAL SIAEC_PDD_ACCOUNT address.
+	address public SIAEC_LAE_ACCOUNT = address(0x4); // Replaced by the REAL SIAEC_LAE_ACCOUNT address.
+	address public SIAEC_PURCHASING_ACCOUNT = address(0x5); // Replaced by the REAL SIAEC_PURCHASING_ACCOUNT address.
+	address public SIAEC_MPU_ACCOUNT = address(0x6); // Replaced by the REAL SIAEC_MPU_ACCOUNT address.
+	address public SIAEC_VETTING_ACCOUNT = address(0x7); // Replaced by the REAL SIAEC_VETTING_ACCOUNT address.
+
+//-------------------------------------------------------------
+// Setup the access control modifier
+	modifier onlyByRR_TCAv_Planner() {
+		require(
+			msg.sender == RR_TCAv_Planner_ACCOUNT,
+			"Only RR account can trigger this function");
+		_;
+	}
+
+	modifier onlyByRR_PURCHASING() {
+		require(
+			msg.sender == RR_PURCHASING_ACCOUNT,
+			"Only RR account can trigger this function");
+		_;
+	}
+
+	modifier onlyBySIAEC_PDD() {
+		require(
+			msg.sender == SIAEC_PDD_ACCOUNT,
+			"Only SIAEC_PDD account can trigger this function");
+		_;
+	}
+
+	modifier onlyBySIAEC_MPU() {
+		require(
+			msg.sender == SIAEC_MPU_ACCOUNT,
+			"Only SIAEC_MPU account can trigger this function");
+		_;
+	}
+
+	modifier onlyBySIAEC_VETTING() {
+		require(
+			msg.sender == SIAEC_VETTING_ACCOUNT,
+			"Only SIAEC_VETTING account can trigger this function");
+		_;
+	}
+
+	modifier onlyBySIAEC_LAE() {
+		require(
+			msg.sender == SIAEC_LAE_ACCOUNT,
+			"Only SIAEC_LAE account can trigger this function");
+		_;
+	}
+
+	modifier onlyBySIAEC_PURCHASING() {
+		require(
+			msg.sender == SIAEC_PURCHASING_ACCOUNT,
+			"Only SIAEC_PURCHASING account can trigger this function");
+		_;
+	}
+
+//-------------------------------------------------------------
+// Type declarations.
 	enum WIState {
-		InitByRR,
-		EmitToSIAEC
+		IssuedByRR,
+		SentWIToSIAEC_PDD,
+		Finalized
 	}
 	struct WorkInstruction {
 		int workInstructionNum;
@@ -29,6 +93,7 @@ contract IssuanceOfWorkInstructionAndPurchaseOrders {
 		string costType;
 		bool workInstructionAcceptance;
 		string invoicingInstructions;
+		uint256 wiId;
 		WIState state;
 	}
 	enum PaymentType {
@@ -40,38 +105,55 @@ contract IssuanceOfWorkInstructionAndPurchaseOrders {
 		string rrCustomerBizAuthName;
 		string sapNetActivityCode;
 	}
+
+	enum InvoiceState {
+		IssuedBySIAEC,
+		SentToRRPurchasing,
+		Finalized
+	}
 	struct Invoice {
 		bool approval;
 		string opServDeskRef; //Operational Service Desk Reference
 		bool paymentMethodType; //True: TotalCare/CorportateCare, False: Other RR Cost
 		PaymentMethod paymentMethod;
 		string otherDetails;
+		InvoiceState state;
 	}
-	struct Bill {
+
+	enum BillingState {
+		IssuedBySIAEC,
+		SentToRRPurchasing,
+		Finalized
+	}
+	struct Billing {
 		bool approval;
-		//TODO: Bill content is still unknown.
+		int price;
+		BillingState state;
+		// The remaining part is unknown.
 	}
 
 	enum POState {
-		InitByRR,
-		EmitToSIAEC
+		IssuedByRR,
+		SentToSIAEC,
+		Finalized
 	}
 	struct PurchaseOrder {
 		string serviceName;
 		string customerCompanyName;
 		string customerFullRegisteredCompanyAddr;
 		int customerPurchaseOrderNum;
-		int quoterequired;
+		bool quoteRequired;
 		int onWingCareLineMaintenanceContractRefNum;
 		string totalCareCorpCareRef;
+		uint256 poId;
 		POState state;
 	}
 	
 	enum QState {
-		InitBySIAEC,
+		CreatedBySIAEC_PURCHASING,
 		AskRRPurchasingForPrice,
 		ReplyPriceToSIAEC,
-		Finilized
+		Finalized
 	}
 	struct Quote {
 		string serviceName;
@@ -92,7 +174,8 @@ contract IssuanceOfWorkInstructionAndPurchaseOrders {
 	}
 	enum TaskCardState {
 		GeneratedByPDD,
-		SendToLAE
+		SentToLAE,
+		Finalized
 	}
 	enum TaskUpdateState {
 		notYetUpdateToWorkPlan,
@@ -117,157 +200,304 @@ contract IssuanceOfWorkInstructionAndPurchaseOrders {
 		string lastUpdateByAndDate;
 		string tspRemarks;
 		string team;
+		bool isCompleted;
+		uint256 wiId;
 		TaskCardState state;
 		TaskUpdateState taskUpdateState;
 	}
 	struct WorkPlan {
-		TaskCard[] tasks;
-	}
-	struct Job {
 		TaskCard[] taskList;
-		bool isComplete;
-		PurchaseOrder purchaseOrder;
 	}
-	Invoice invoice;
-	Job job;
-	TaskCard task;
-	WorkInstruction WI;
-	WorkPlan WP;
-	PurchaseOrder PO;
-	Catalogue[] Catalogues;
-	Quote Q;
+
 //-------------------------------------------------------------
-// Step 0.
-	function init () public {
-		job.isComplete = false;
-	}
+// Data declarations.
+	// All issued WI will be stored in WIs.
+	WorkInstruction[] WIs;
+	// All issued PO will be stored in POs.
+	PurchaseOrder[] POs;
+	// Map the PO id to the quote.
+	mapping (uint256 => Quote) POidToQuote;
+	Catalogue[] Catalogues;
+	// Map the WI id to the tasks.
+	mapping (uint256 => TaskCard) WIidToTasks;
+	// Map the WI id to the invoices.
+	mapping (uint256 => Invoice) WIidToInvoices;
+	// The universal WorkPlan which is own by Aircraft OEM.
+	WorkPlan WP;
+	// Map the WI id to the billings.
+	mapping (uint256 => Billing) WIidToBillings;
+
 
 //-------------------------------------------------------------
 // Step 4.
-	// Sender: RR
-	function sendWI () public {
-		//send WI to SIAEC PDD
-		WI.state = WIState.EmitToSIAEC;
-		//send WI to Airline MPC
-		//TODO: how to loop Airline MPC.
-	}
-
-	// Sender: RR
-	function issueWorkInstruction (/* You can use arguments to fill up the WI form */) public {
-		WI.ownerOperator = "XYZ Air";
-		WI.engineType = "XX::KXKX";
-		WI.engineSerialNumber = "BICX1";
-		WI.state = WIState.InitByRR;
-		sendWI();
-	}
-
-	// Sender: RR
-	function issuePurchaseOrders (/* You can use arguments to fill up the PO form */) public {
-		PO.serviceName = "Foobar";
-		PO.customerCompanyName = "XYZ Air";
-		PO.state = POState.EmitToSIAEC;
-	}
-
 	// Sender: Someone from Step3.
-	function entryPoint() public {
-		issueWorkInstruction();
-		issuePurchaseOrders();
+	function entryPoint() public onlyByRR_TCAv_Planner {
+		issueWorkInstruction("XYZ Air", "XX::KXKX", "BICX1");
+		issuePurchaseOrders("ServiceName", "XYZ Air");
 	}
 
-	// Sender: SIAEC
-	function sendQuote () public {
-		uint i = 0;
-		Q.serviceName = PO.serviceName;
-		Q.isApproval = false;
-		for (i = 0; i < Catalogues.length; i++) {
-			if (keccak256(abi.encodePacked(PO.serviceName)) == keccak256(abi.encodePacked(Catalogues[i].serviceName))) {
-				Q.price = Catalogues[i].price;
-				Q.isApproval = true;
-				Q.state = QState.Finilized;
-				break;
+	function issueWorkInstruction (
+		string memory ownerOperator,
+		string memory engineType,
+		string memory engineSerialNumber
+	) public onlyByRR_TCAv_Planner {
+		WorkInstruction memory WI;
+		WI.ownerOperator = ownerOperator;
+		WI.engineType = engineType;
+		WI.engineSerialNumber = engineSerialNumber;
+		WI.state = WIState.IssuedByRR;
+		WIs.push(WI);
+		WI.wiId = WIs.length-1;
+		sendWIToSIAEC(WI.wiId);
+		ccWIToAirlineMPC(WI.wiId);
+	}
+
+	function sendWIToSIAEC(uint wiId) internal onlyByRR_TCAv_Planner {
+		if (WIs[wiId].state != WIState.IssuedByRR) {
+			revert(); // Wrong WIID.
+		}
+		WIs[wiId].state = WIState.SentWIToSIAEC_PDD;
+	}
+	function ccWIToAirlineMPC(uint wiId) internal onlyByRR_TCAv_Planner {
+		// Trigger email service to cc WI to Airline MPC.
+	}
+
+	function issuePurchaseOrders (
+		string memory serviceName,
+		string memory customerCompanyName
+	) public onlyByRR_TCAv_Planner {
+		PurchaseOrder memory PO;
+		POs.push(PO);
+		uint256 poId = POs.length-1;
+		POs[poId].serviceName = serviceName;
+		POs[poId].customerCompanyName = customerCompanyName;
+		POs[poId].state = POState.IssuedByRR;
+		POs[poId].poId = POs.length;
+		sendPOToSIAEC_PURCHASING(poId);
+	}
+
+	function sendPOToSIAEC_PURCHASING(
+		uint256 poId
+	) internal onlyByRR_TCAv_Planner {
+		if (POs[poId].state != POState.IssuedByRR) {
+			revert(); // Wrong PO state.
+		}
+		POs[poId].state = POState.SentToSIAEC;
+	}
+
+	function fillUpPO(
+		uint poId
+	) public onlyBySIAEC_PURCHASING {
+		if (POs[poId].state != POState.SentToSIAEC) {
+			revert(); // Wrong PO state.
+		}
+		POs[poId].quoteRequired = true; // Assume the serviceName is not in the Catalogues.
+		// Check if the service name is in the Catalogues or not
+		for (uint iterCt = 0; iterCt < Catalogues.length; iterCt++) {
+			if (keccak256(abi.encodePacked(POs[poId].serviceName)) == keccak256(abi.encodePacked(Catalogues[iterCt].serviceName))) {
+				// The serviceName is in the Catalogues.
+				POs[poId].quoteRequired = false;
 			}
 		}
-		if (Q.state != QState.Finilized) {
-			// Catalogue not found
-			Q.price = 0; // Will be provided by RR purchasing later.
-			Q.state = QState.AskRRPurchasingForPrice;
+
+		if (POs[poId].quoteRequired) {
+			// If the serviceName is not in the Catalogues, PO should ask RR purchasing for the price.
+			createQuoteWithPOid(poId);
+			sendQuoteToRR(poId);
+		} else {
+			POs[poId].state = POState.Finalized;
+			// Because the serviceName is in the Catalogues, 
 		}
 	}
 
-// Sender: RR purchasing
-	function replyQuote () public {
-		Q.price = 1234; // RR purchasing sets the price to the service;
-		Q.state = QState.ReplyPriceToSIAEC;
+	function createQuoteWithPOid(
+		uint256 poId
+	) internal onlyBySIAEC_PURCHASING {
+		Quote memory Q;
+		Q.serviceName = POs[poId].serviceName;
+		Q.price = 0; // Will be updated by RR_PURCHASING later.
+		Q.isApproval = false;
+		Q.state = QState.CreatedBySIAEC_PURCHASING;
+		POidToQuote[poId] = Q;
 	}
 
-	// Sender: SIAEC
-	function approveQuote () public {
-		Q.isApproval = true;
+	function sendQuoteToRR(
+		uint256 poId
+	) internal onlyBySIAEC_PURCHASING {
+		if (POidToQuote[poId].state != QState.CreatedBySIAEC_PURCHASING) {
+			revert(); // Wrong Quote state.
+		}
+		POidToQuote[poId].state = QState.AskRRPurchasingForPrice;
+	}
+
+	function replyQuotePrice(
+		uint256 poId,
+		int price
+	) public onlyByRR_PURCHASING {
+		if (POidToQuote[poId].state != QState.AskRRPurchasingForPrice) {
+			revert(); // Wrong Quote state.
+		}
+		POidToQuote[poId].state = QState.ReplyPriceToSIAEC;
+		POidToQuote[poId].price = price;
+	}
+
+	function approveQuote (
+		uint256 poId
+	) public onlyBySIAEC_PURCHASING {
+		if (POidToQuote[poId].state != QState.ReplyPriceToSIAEC) {
+			revert(); // Wrong Quote state.
+		}
+
+		POidToQuote[poId].isApproval = true;
 
 		// Save to Catalogue
 		Catalogue memory C;
-		C.serviceName = Q.serviceName;
-		C.price = Q.price;
+		C.serviceName = POidToQuote[poId].serviceName;
+		C.price = POidToQuote[poId].price;
 		Catalogues.push(C);
-		Q.state = QState.Finilized;
+		POidToQuote[poId].state = QState.Finalized;
+		POs[poId].state = POState.Finalized;
 	}
+
+
 //-------------------------------------------------------------
 // Step 5.
 	// Trigger by Step4. when SIAEC PDD received WI.
-	function generateTaskCards () public {
-		task.taskName = WI.requestedTaskDescription;
-		task.acRegistration = WI.acRegistration;
+	function generateTaskCards (
+		uint256 wiId
+	) public onlyBySIAEC_PDD {
+		TaskCard memory task;
+		task.taskName = WIs[wiId].requestedTaskDescription;
+		task.acRegistration = WIs[wiId].acRegistration;
 		task.taskType = TaskCategory.SpecialInspection; // For the demo purpose, we just set the category to SpecialInspection, and you could set the value by the arguments in the future.
-		task.description = WI.requestedTaskDescription;
+		task.description = WIs[wiId].requestedTaskDescription;
+		task.isCompleted = false;
+		task.wiId = wiId;
+
 		task.state = TaskCardState.GeneratedByPDD;
 		task.taskUpdateState = TaskUpdateState.notYetUpdateToWorkPlan;
+
+		WIidToTasks[wiId] = task;
 	}
 
 	// Sender: SIAEC PDD, issue to SIAEC LAE
-	function issueTaskCard () public {
-		task.state = TaskCardState.SendToLAE;
-		job.taskList.push(task);
+	function issueTaskCardToWorkPlan (
+		uint256 wiId
+	) public onlyBySIAEC_PDD {
+		if (WIidToTasks[wiId].state != TaskCardState.GeneratedByPDD) {
+			revert(); // Wrong Task State.
+		}
+		WIidToTasks[wiId].state = TaskCardState.SentToLAE;
+		WIidToTasks[wiId].taskUpdateState = TaskUpdateState.UpdatedToWorkPlan;
+		WP.taskList.push(WIidToTasks[wiId]);
 	}
 
-	// Sender: SIAEC, send to Aircraft OEM **everyday**
-	function updateTaskToWorkPlan () public {
-		uint i = 0;
-		for (i = 0; i < job.taskList.length; i++) {
-			if (job.taskList[i].taskUpdateState == TaskUpdateState.notYetUpdateToWorkPlan) {
-				WP.tasks.push(job.taskList[i]);
-				job.taskList[i].taskUpdateState = TaskUpdateState.UpdatedToWorkPlan;
-			}
+	function assumeStep7UpdateTask (
+		uint256 wiId
+	) public onlyBySIAEC_MPU {
+		if (WIidToTasks[wiId].state != TaskCardState.SentToLAE) {
+			revert(); // Wrong Task State.
 		}
+		// Because we don't handle the step 7 in our proposal.
+		// We just assume that MPU will update tasks directly.
+		WIidToTasks[wiId].state = TaskCardState.Finalized;
+		WIidToTasks[wiId].isCompleted = true;
 	}
+
 //-------------------------------------------------------------
 // Step 17.
 	// Sender: Step 17 entry point, assume all of the tasks in the job are done.
-	function clearJob() public {
-		job.isComplete = true;
+	function prepareToCloseWI(
+		uint256 wiId
+	) public onlyBySIAEC_VETTING {
+		sendDocsToERP();
+		createBilling(wiId);
+		sendBillingToRR(wiId);
 	}
+
 	// Sender: SIAEC Vetting sends two files to the ERP system
-	function sendDocsToERP () public {
-		// TODO: Send Tech records
-		// TODO: Send job
+	function sendDocsToERP () internal onlyBySIAEC_VETTING {
+		// Update Tech records in ERP
+		// Archive TaskCard from this contract and send it to the ERP system.
 	}
+
+	function createBilling (
+		uint256 wiId
+	) internal onlyBySIAEC_VETTING {
+		uint256 poId = wiId;
+		Billing memory B;
+		B.approval = false;
+		// Load the service price from Catalogues.
+		for (uint256 iterCt = 0; iterCt < Catalogues.length; iterCt++) {
+			if (keccak256(abi.encodePacked(POs[poId].serviceName)) == keccak256(abi.encodePacked(Catalogues[iterCt].serviceName))) {
+				B.price = Catalogues[iterCt].price;
+			}
+		}
+		B.state = BillingState.IssuedBySIAEC;
+		WIidToBillings[wiId] = B;
+	}
+
 	// Sender: SIAEC sends billing request to RR
-	function sendBillingToRR () public {
-		// TODO: Send billing
+	function sendBillingToRR (
+		uint256 wiId
+	) internal onlyBySIAEC_VETTING {
+		if (WIidToBillings[wiId].state != BillingState.IssuedBySIAEC) {
+			revert(); // Wrong Billing State.
+		}
+		WIidToBillings[wiId].state = BillingState.SentToRRPurchasing;
 	}
+
 	// Sender: RR approves the billing request to SIAEC
-	function approveBilling () public {
+	function approveBilling (
+		uint256 wiId
+	) public onlyByRR_PURCHASING {
+		if (WIidToBillings[wiId].state != BillingState.SentToRRPurchasing) {
+			revert(); // Wrong Billing State.
+		}
+		WIidToBillings[wiId].state = BillingState.Finalized;
+		WIidToBillings[wiId].approval = true;
 	}
+
+	function createInvoice (
+		uint256 wiId
+	) public onlyBySIAEC_VETTING {
+		uint256 poId = wiId;
+		Invoice memory I;
+		I.approval = false;
+		I.opServDeskRef = POs[poId].serviceName;
+		I.state = InvoiceState.IssuedBySIAEC;
+		WIidToInvoices[wiId] = I;
+	}
+
 	// Sender: SIAEC sends invoice to RR and request RR's approval
-	function sendInvoice () public {
-		invoice.approval = false;
-		invoice.opServDeskRef = job.purchaseOrder.totalCareCorpCareRef;
+	function sendInvoice (
+		uint256 wiId
+	) public onlyBySIAEC_VETTING {
+		if (WIidToInvoices[wiId].state != InvoiceState.IssuedBySIAEC) {
+			revert(); // Wrong Invoice State
+		}
+		WIidToInvoices[wiId].state = InvoiceState.SentToRRPurchasing;
 	}
+
 	// Sender: RR approves the invoice
-	function approveInvoice () public {
-		invoice.approval = true;
+	function approveInvoice (
+		uint256 wiId
+	) public onlyByRR_PURCHASING {
+		if (WIidToInvoices[wiId].state != InvoiceState.SentToRRPurchasing) {
+			revert(); // Wrong Invoice State
+		}
+		WIidToInvoices[wiId].approval = true;
+		WIidToInvoices[wiId].state = InvoiceState.Finalized;
 	}
+
 	// Sender: SIAEC pays the money
-	function pay () public {
+	function pay (
+		uint256 wiId
+	) public onlyBySIAEC_VETTING {
+		if (WIidToInvoices[wiId].state != InvoiceState.Finalized) {
+			revert(); // Wrong Invoice State
+		}
+		// Pay the money
 	}
 }
 
