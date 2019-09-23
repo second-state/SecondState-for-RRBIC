@@ -32,23 +32,7 @@ contract IssuanceOfWorkInstructionAndPurchaseOrders {
 		WIState state;
 	}
 	struct WorkPlan {
-		string task;
-		int acPriority;
-		string type;
-		int referenceNumber;
-		string description;
-		int funcLOCATA;
-		string notificationMEL;
-		string mplanCAT;
-		int lastDoneOriginDate;
-		int dueDate;
-		string remarksRectifications;
-		string sparesRequired;
-		int quantity;
-		int status;
-		string lastUpdateByAndDate;
-		string tspRemarks;
-		string team;
+		TaskCard[] tasks;
 	}
 	struct PaymentMethod {
 		string rrCustomerBizAuthName;
@@ -108,23 +92,34 @@ contract IssuanceOfWorkInstructionAndPurchaseOrders {
 		GeneratedByPDD,
 		SendToLAE,
 	}
+	enum TaskUpdateState {
+		notYetUpdateToWorkPlan,
+		UpdatedToWorkPlan,
+	}
 	struct TaskCard {
-		string taskLocation;
-		int taskStartDateTime;
-		int taskEndDateTime;
-		string workscopeContactName;
-		int workscopeContatNumber;
-		string requestedTaskDescription;
-		string technicalDataRef;
-		string siaTaskRef;
-		bool isComplete;
-		int rebate;
-		TaskCategory category;
+		string taskName;
+		string acRegistration;
+		int priority;
+		string type;
+		int referenceNumber;
+		string description;
+		int funcLOC_ATA;
+		string notificationMEL;
+		string mplan_CAT;
+		int lastDoneOriginDate;
+		int dueDate;
+		string remarksRectifications;
+		string sparesRequired;
+		int quantity;
+		int status;
+		string lastUpdateByAndDate;
+		string tspRemarks;
+		string team;
 		TaskCardState state;
+		TaskUpdateState taskUpdateState;
 	}
 	struct Job {
-		//TODO: I need a task list here.
-		Task* taskList;
+		TaskCard[] taskList;
 		bool isComplete;
 		PurchaseOrder purchaseOrder;
 	}
@@ -208,24 +203,26 @@ contract IssuanceOfWorkInstructionAndPurchaseOrders {
 // Step 5.
 	// Trigger by Step4. when SIAEC PDD received WI.
 	function generateTaskCards () public {
-		task.taskLocation = WI.taskLocation;
-		task.taskStartDateTime = WI.taskStartDateTime;
-		task.taskEndDateTime = WI.taskEndDateTime;
-		task.workscopeContactName = WI.workscopeContactName;
-		task.workscopeContatNumber = WI.workscopeContatNumber;
-		task.requestedTaskDescription = WI.requestedTaskDescription;
-		task.technicalDataRef = WI.technicalDataRef;
-		task.siaTaskRef = WI.siaTaskRef;
-		task.category = SpecialInspection; // For the demo purpose, we just set the category to SpecialInspection, and you could set the value by the arguments in the future.
+		task.taskName = WI.requestedTaskDescription;
+		task.acRegistration = WI.acRegistration;
+		task.type = SpecialInspection; // For the demo purpose, we just set the category to SpecialInspection, and you could set the value by the arguments in the future.
+		task.description = WI.requestedTaskDescription;
 		task.state = GeneratedByPDD;
+		task.taskUpdateState = notYetUpdateToWorkPlan;
 	}
 
-	// Sender: PDD, issue to LAE
+	// Sender: SIAEC PDD, issue to SIAEC LAE
 	function issueTaskCard () public {
 		task.state = SendToLAE;
+		//TODO: Add task into Job.taskList
 	}
 
-	// 
+	// Sender: SIAEC, send to Aircraft OEM everyday
+	function updateTaskToWorkPlan () public {
+		//TODO: traverse tasks in the Job.taskList,
+		//     	    if task.taskUpdateState = notYetUpdateToWorkPlan
+		//               insert tasks which are not yet updated into WorkPlan
+	}
 //-------------------------------------------------------------
 // Step 17.
 }
